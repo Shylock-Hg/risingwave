@@ -4,6 +4,7 @@ package hummock;
 
 import "catalog.proto";
 import "common.proto";
+import "iceberg_compaction.proto";
 
 option java_package = "com.risingwave.proto";
 option optimize_for = SPEED;
@@ -428,11 +429,11 @@ message HummockPinnedSnapshot {
   uint64 minimal_pinned_snapshot = 2;
 }
 
-message GetNewSstIdsRequest {
+message GetNewObjectIdsRequest {
   uint32 number = 1;
 }
 
-message GetNewSstIdsResponse {
+message GetNewObjectIdsResponse {
   common.Status status = 1;
   // inclusive
   uint64 start_id = 2;
@@ -678,6 +679,8 @@ message RiseCtlUpdateCompactionConfigRequest {
       uint64 level0_stop_write_threshold_max_size = 28;
       // The limitation of the max sst count of the trivial move task
       uint32 sst_allowed_trivial_move_max_count = 29;
+      // Enable the optimization of the interval selection for the level0 compaction
+      bool enable_optimize_l0_interval_selection = 30;
     }
   }
   repeated uint64 compaction_group_ids = 1;
@@ -811,7 +814,7 @@ service HummockManagerService {
   rpc GetAssignedCompactTaskNum(GetAssignedCompactTaskNumRequest) returns (GetAssignedCompactTaskNumResponse);
   rpc TriggerCompactionDeterministic(TriggerCompactionDeterministicRequest) returns (TriggerCompactionDeterministicResponse);
   rpc DisableCommitEpoch(DisableCommitEpochRequest) returns (DisableCommitEpochResponse);
-  rpc GetNewSstIds(GetNewSstIdsRequest) returns (GetNewSstIdsResponse);
+  rpc GetNewObjectIds(GetNewObjectIdsRequest) returns (GetNewObjectIdsResponse);
   rpc TriggerManualCompaction(TriggerManualCompactionRequest) returns (TriggerManualCompactionResponse);
   rpc TriggerFullGC(TriggerFullGCRequest) returns (TriggerFullGCResponse);
   rpc RiseCtlGetPinnedVersionsSummary(RiseCtlGetPinnedVersionsSummaryRequest) returns (RiseCtlGetPinnedVersionsSummaryResponse);
@@ -836,6 +839,9 @@ service HummockManagerService {
   rpc CancelCompactTask(CancelCompactTaskRequest) returns (CancelCompactTaskResponse);
   rpc GetVersionByEpoch(GetVersionByEpochRequest) returns (GetVersionByEpochResponse);
   rpc MergeCompactionGroup(MergeCompactionGroupRequest) returns (MergeCompactionGroupResponse);
+
+  // iceberg
+  rpc SubscribeIcebergCompactionEvent(stream iceberg_compaction.SubscribeIcebergCompactionEventRequest) returns (stream iceberg_compaction.SubscribeIcebergCompactionEventResponse);
 }
 
 message CompactionConfig {
@@ -895,6 +901,9 @@ message CompactionConfig {
 
   // The limitation of the max sst count of the trivial move task
   optional uint32 sst_allowed_trivial_move_max_count = 29;
+
+  // Enable the optimization of the interval selection for the level0 compaction
+  optional bool enable_optimize_l0_interval_selection = 30;
 }
 
 message TableStats {

@@ -33,7 +33,7 @@ use risingwave_hummock_sdk::key::{
 use risingwave_hummock_sdk::key_range::KeyRangeCommon;
 use risingwave_hummock_sdk::sstable_info::SstableInfo;
 use risingwave_hummock_sdk::table_watermark::{
-    TableWatermarksIndex, VnodeWatermark, WatermarkDirection, WatermarkSerdeType,
+    PkPrefixTableWatermarksIndex, VnodeWatermark, WatermarkDirection, WatermarkSerdeType,
 };
 use risingwave_hummock_sdk::{EpochWithGap, HummockEpoch, LocalSstableInfo};
 use risingwave_pb::hummock::LevelType;
@@ -227,7 +227,7 @@ pub struct HummockReadVersion {
     /// `ReadVersion` just for that local state store.
     is_replicated: bool,
 
-    table_watermarks: Option<TableWatermarksIndex>,
+    table_watermarks: Option<PkPrefixTableWatermarksIndex>,
 
     // Vnode bitmap corresponding to the read version
     // It will be initialized after local state store init
@@ -252,15 +252,17 @@ impl HummockReadVersion {
             table_watermarks: {
                 match committed_version.table_watermarks.get(&table_id) {
                     Some(table_watermarks) => match table_watermarks.watermark_type {
-                        WatermarkSerdeType::PkPrefix => Some(TableWatermarksIndex::new_committed(
-                            table_watermarks.clone(),
-                            committed_version
-                                .state_table_info
-                                .info()
-                                .get(&table_id)
-                                .expect("should exist")
-                                .committed_epoch,
-                        )),
+                        WatermarkSerdeType::PkPrefix => {
+                            Some(PkPrefixTableWatermarksIndex::new_committed(
+                                table_watermarks.clone(),
+                                committed_version
+                                    .state_table_info
+                                    .info()
+                                    .get(&table_id)
+                                    .expect("should exist")
+                                    .committed_epoch,
+                            ))
+                        }
 
                         WatermarkSerdeType::NonPkPrefix => None, /* do not fill the non-pk prefix watermark to index */
                     },
@@ -390,7 +392,8 @@ impl HummockReadVersion {
                     }));
 
                     if let Some(committed_watermarks) =
-                        self.committed.table_watermarks.get(&self.table_id)
+                        committed_version.table_watermarks.get(&self.table_id)
+                        && let WatermarkSerdeType::PkPrefix = committed_watermarks.watermark_type
                     {
                         if let Some(watermark_index) = &mut self.table_watermarks {
                             watermark_index.apply_committed_watermarks(
@@ -398,10 +401,11 @@ impl HummockReadVersion {
                                 committed_epoch,
                             );
                         } else {
-                            self.table_watermarks = Some(TableWatermarksIndex::new_committed(
-                                committed_watermarks.clone(),
-                                committed_epoch,
-                            ));
+                            self.table_watermarks =
+                                Some(PkPrefixTableWatermarksIndex::new_committed(
+                                    committed_watermarks.clone(),
+                                    committed_epoch,
+                                ));
                         }
                     }
                 }
@@ -422,7 +426,7 @@ impl HummockReadVersion {
                         direction,
                     );
                 } else {
-                    self.table_watermarks = Some(TableWatermarksIndex::new(
+                    self.table_watermarks = Some(PkPrefixTableWatermarksIndex::new(
                         direction,
                         epoch,
                         vnode_watermarks,
@@ -1037,10 +1041,10 @@ impl HummockVersionReader {
 
         if let Some(max_epoch_change_log) = change_log.last() {
             let (_, max_epoch) = epoch_range;
-            if !max_epoch_change_log.epochs.contains(&max_epoch) {
+            if !max_epoch_change_log.epochs().contains(&max_epoch) {
                 warn!(
                     max_epoch,
-                    change_log_epochs = ?change_log.iter().flat_map(|epoch_log| epoch_log.epochs.iter()).collect_vec(),
+                    change_log_epochs = ?change_log.iter().flat_map(|epoch_log| epoch_log.epochs()).collect_vec(),
                     table_id = options.table_id.table_id,
                     "max_epoch does not exist"
                 );

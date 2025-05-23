@@ -562,6 +562,19 @@ pub struct MetaDeveloperConfig {
     #[serde(default = "default::developer::hummock_time_travel_filter_out_objects_batch_size")]
     pub hummock_time_travel_filter_out_objects_batch_size: usize,
 
+    #[serde(default = "default::developer::hummock_time_travel_filter_out_objects_v1")]
+    pub hummock_time_travel_filter_out_objects_v1: bool,
+
+    #[serde(
+        default = "default::developer::hummock_time_travel_filter_out_objects_list_version_batch_size"
+    )]
+    pub hummock_time_travel_filter_out_objects_list_version_batch_size: usize,
+
+    #[serde(
+        default = "default::developer::hummock_time_travel_filter_out_objects_list_delta_batch_size"
+    )]
+    pub hummock_time_travel_filter_out_objects_list_delta_batch_size: usize,
+
     #[serde(default)]
     pub compute_client_config: RpcClientConfig,
 
@@ -1043,6 +1056,9 @@ pub struct FileCacheConfig {
     #[serde(default = "default::file_cache::throttle")]
     pub throttle: Throttle,
 
+    #[serde(default = "default::file_cache::fifo_probation_ratio")]
+    pub fifo_probation_ratio: f64,
+
     /// Recover mode.
     ///
     /// Options:
@@ -1094,6 +1110,12 @@ pub enum CompactorMode {
 
     #[clap(alias = "shared")]
     Shared,
+
+    #[clap(alias = "dedicated_iceberg")]
+    DedicatedIceberg,
+
+    #[clap(alias = "shared_iceberg")]
+    SharedIceberg,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, DefaultFromSerde, ConfigDoc)]
@@ -1289,6 +1311,9 @@ pub struct BatchDeveloperConfig {
 
     #[serde(default)]
     pub compute_client_config: RpcClientConfig,
+
+    #[serde(default)]
+    pub frontend_client_config: RpcClientConfig,
 
     #[serde(default = "default::developer::batch_local_execute_buffer_size")]
     pub local_execute_buffer_size: usize,
@@ -2025,6 +2050,10 @@ pub mod default {
             None
         }
 
+        pub fn fifo_probation_ratio() -> f64 {
+            0.1
+        }
+
         pub fn recover_mode() -> RecoverMode {
             RecoverMode::Quiet
         }
@@ -2212,6 +2241,18 @@ pub mod default {
         }
 
         pub fn hummock_time_travel_filter_out_objects_batch_size() -> usize {
+            1000
+        }
+
+        pub fn hummock_time_travel_filter_out_objects_v1() -> bool {
+            false
+        }
+
+        pub fn hummock_time_travel_filter_out_objects_list_version_batch_size() -> usize {
+            10
+        }
+
+        pub fn hummock_time_travel_filter_out_objects_list_delta_batch_size() -> usize {
             1000
         }
 
@@ -2502,6 +2543,10 @@ pub mod default {
 
         pub fn level0_stop_write_threshold_max_size() -> u64 {
             DEFAULT_LEVEL0_STOP_WRITE_THRESHOLD_MAX_SIZE
+        }
+
+        pub fn enable_optimize_l0_interval_selection() -> bool {
+            false
         }
     }
 
@@ -2900,6 +2945,8 @@ pub struct CompactionConfig {
     pub level0_stop_write_threshold_max_sst_count: u32,
     #[serde(default = "default::compaction_config::level0_stop_write_threshold_max_size")]
     pub level0_stop_write_threshold_max_size: u64,
+    #[serde(default = "default::compaction_config::enable_optimize_l0_interval_selection")]
+    pub enable_optimize_l0_interval_selection: bool,
 }
 
 /// Note: only applies to meta store backends other than `SQLite`.
